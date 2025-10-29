@@ -3,24 +3,33 @@ import prisma from "../PrimaClient";
 const EVENT_ID = "node-meetup-2025";
 
 export async function seedEvent() {
-  const existing = await prisma.event.findUnique({
-    where: { eventId: 'node-meetup-2025' },
-  });
-  if (!existing) {
-    await prisma.event.create({
-      data: {
-        eventId: 'node-meetup-2025',
-        name: 'Node.js Meet-up',
-        totalSeats: 20,
-        availableSeats: 20,
-      },
+  try {
+
+    const existing = await prisma.event.findUnique({
+      where: { eventId: 'node-meetup-2025' },
     });
-    console.log('Seeded event node-meetup-2025');
-  } else {
-    console.log("data already exist")
+
+    if (!existing) {
+      await prisma.event.create({
+        data: {
+          eventId: 'node-meetup-2025',
+          name: 'Node.js Meet-up',
+          totalSeats: 500,
+          availableSeats: 500,
+        },
+      });
+      console.log('Seeded event node-meetup-2025');
+    } else {
+      console.log("data already exist")
+    }
+
+    // const data=await prisma.event.deleteMany();
+    // console.log(data)
+
   }
-  // const data=await prisma.event.deleteMany();
-  // console.log(data)
+  catch (error) {
+    console.error("Error seeding the database", error);
+  }
 }
 
 

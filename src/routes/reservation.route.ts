@@ -6,8 +6,8 @@ import { createreservationSchema, updateReservationSchema } from "../validators/
 const reservationsRouter: ExpressRouter = Router();
 
 reservationsRouter.route("/").get(getAllReservations);
-reservationsRouter.route("/").post(validate(createreservationSchema),createReservation);
-reservationsRouter.route("/:reservationId").patch(validate(updateReservationSchema),updateReservation);
+reservationsRouter.route("/").post(validate(createreservationSchema), createReservation);
+reservationsRouter.route("/:reservationId").patch(validate(updateReservationSchema), updateReservation);
 reservationsRouter.route("/:reservationId").delete(cancelReservation);
 
 export default reservationsRouter;

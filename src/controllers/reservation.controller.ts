@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { Prisma } from "@prisma/client";
 import { v4 as uuidv4 } from "uuid";
 import prisma from "../PrimaClient";
-const MAX_RETRIES = 5;
+const MAX_RETRIES = 6;
 const EVENT_ID = "node-meetup-2025";
 
 export const createReservation = async (req: Request, res: Response) => {
@@ -17,15 +17,18 @@ export const createReservation = async (req: Request, res: Response) => {
   }
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+
     const event = await prisma.event.findUnique({
       where: { eventId: EVENT_ID },
       select: { availableSeats: true, version: true },
     });
+
     if (!event)
       return res.status(500).json({ error: "Event not found" });
 
     if (event.availableSeats < seats)
       return res.status(409).json({ error: "Not enough seats left", remainingSeats: event.availableSeats, });
+
     try {
       const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         const updated = await tx.event.updateMany({
@@ -57,7 +60,9 @@ export const createReservation = async (req: Request, res: Response) => {
         seats,
         status: "confirmed",
       });
+
     } catch (err: any) {
+
       if (err.message === "Version conflict") continue;
       console.error(err);
       return res.status(500).json({ error: "Internal error" });
@@ -73,14 +78,17 @@ export const cancelReservation = async (req: Request, res: Response) => {
   const reservation = await prisma.reservation.findUnique({
     where: { reservationId },
   });
+
   if (!reservation || reservation.status === "cancelled")
-    return res.status(404).json({ error: "Not found or already cancelled" });
+    return res.status(404).json({ error: "Reservation not found or already cancelled" });
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+
     const event = await prisma.event.findUnique({
       where: { eventId: EVENT_ID },
       select: { availableSeats: true, version: true },
     });
+
     if (!event)
       return res.status(500).json({ error: "Event missing" });
 
@@ -104,7 +112,9 @@ export const cancelReservation = async (req: Request, res: Response) => {
       });
 
       if (success) return res.status(204).send();
+
     } catch (err: any) {
+
       if (err.message === "Version conflict") continue;
       console.error(err);
       return res.status(500).json({ error: "Internal error" });
@@ -136,12 +146,11 @@ export const updateReservation = async (req: Request, res: Response) => {
       return res.status(200).json({ message: "No change in seats" });
     }
 
-    let success = false;
-    const MAX_RETRIES = 3;
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
 
-    for (let attempt = 0; attempt < MAX_RETRIES && !success; attempt++) {
       const event = await prisma.event.findUnique({
         where: { eventId: EVENT_ID },
+        select: { availableSeats: true, version: true },
       });
 
       if (!event) {
@@ -152,63 +161,72 @@ export const updateReservation = async (req: Request, res: Response) => {
         return res.status(409).json({ error: "Not enough seats left" });
       }
 
-      let eventUpdateData;
+      try {
+        const success = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+          const updated = await tx.event.updateMany({
+            where: { eventId: EVENT_ID, version: event.version },
+            data: {
+              availableSeats: seatDiff > 0 ? { decrement: seatDiff } : { increment: Math.abs(seatDiff) },
+              version: { increment: 1 },
+            },
+          });
 
-      if (seatDiff > 0) {
-        eventUpdateData = {
-          availableSeats: { decrement: seatDiff },
-          version: { increment: 1 },
-        };
-      } else {
-        eventUpdateData = {
-          availableSeats: { increment: Math.abs(seatDiff) },
-          version: { increment: 1 },
-        };
-      }
+          if (updated.count === 0) throw new Error("Version conflict");
 
-      const updateEvent = await prisma.event.updateMany({
-        where: { eventId: EVENT_ID, version: event.version },
-        data: eventUpdateData,
-      });
+          await tx.reservation.update({
+            where: { reservationId },
+            data: { seats: newSeats },
+          });
 
-      if (updateEvent.count === 1) {
-        await prisma.reservation.update({
-          where: { reservationId },
-          data: { seats: newSeats },
-        });
-        success = true;
+          return true;
+        }
+        );
+
+        if (success) {
+          return res.status(200).json({
+            reservationId,
+            newSeats,
+            status: "updated",
+          });
+        }
+
+      } catch (err: any) {
+        if (err.message === "Version conflict") continue;
+        console.error("Error updating reservation:", err);
+        return res.status(500).json({ error: "Server error" });
       }
     }
 
-    if (!success) {
-      return res
-        .status(409)
-        .json({ error: "Concurrent update detected, please retry" });
-    }
+    return res.status(409).json({ error: "Concurrent update detected, please retry" });
 
-    return res.status(200).json({
-      reservationId,
-      newSeats,
-      status: "updated",
-    });
   } catch (err) {
     console.error("Error updating reservation:", err);
     return res.status(500).json({ error: "Server error" });
   }
 };
 
-export const getAllReservations = async (req: Request, res: Response) => {
-  const reservations = await prisma.reservation.findMany({
-    where: { eventId: EVENT_ID },
-    select: {
-      reservationId: true,
-      partnerId: true,
-      seats: true,
-      status: true,
-      createdAt: true,
-      eventId: true,
-    },
-  });
 
-  return res.json(reservations);
+export const getAllReservations = async (req: Request, res: Response) => {
+
+  try {
+
+    const reservations = await prisma.reservation.findMany({
+      where: { eventId: EVENT_ID },
+      select: {
+        reservationId: true,
+        partnerId: true,
+        seats: true,
+        status: true,
+        createdAt: true,
+        eventId: true,
+      },
+    });
+
+    return res.json(reservations);
+
+  }
+  catch (error) {
+    console.error("Error fetching reservations", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
 };
