@@ -1,12 +1,38 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import prisma from "../PrimaClient";
 const EVENT_ID = "node-meetup-2025";
 
-/**
- * Get event details with reservation count
- */
+export async function seedEvent() {
+  try {
+
+    const existing = await prisma.event.findUnique({
+      where: { eventId: 'node-meetup-2025' },
+    });
+
+    if (!existing) {
+      await prisma.event.create({
+        data: {
+          eventId: 'node-meetup-2025',
+          name: 'Node.js Meet-up',
+          totalSeats: 500,
+          availableSeats: 500,
+        },
+      });
+      console.log('Seeded event node-meetup-2025');
+    } else {
+      console.log("data already exist")
+    }
+
+    // const data=await prisma.event.deleteMany();
+    // console.log(data)
+
+  }
+  catch (error) {
+    console.error("Error seeding the database", error);
+  }
+}
+
+
 export const getEventStatus = async (req: Request, res: Response) => {
   try {
     const event = await prisma.event.findUnique({
