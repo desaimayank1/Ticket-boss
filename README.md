@@ -59,6 +59,7 @@ npm run dev
 # 4️⃣ Run test for concurrency
 npx ts-node ConcurrencyTest.ts
 ```
+Deployed Link : https://ticket-boss1.vercel.app/
 
 ## 📚 API Documentation
 ###  1. Event Bootstrap (Auto-Seeded)
