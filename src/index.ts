@@ -21,14 +21,16 @@ async function seedEvent() {
             data: {
                 eventId: 'node-meetup-2025',
                 name: 'Node.js Meet-up',
-                totalSeats: 500,
-                availableSeats: 500,
+                totalSeats: 20,
+                availableSeats: 20,
             },
         });
         console.log('Seeded event node-meetup-2025');
     }else{
         console.log("data already exist")
     }
+    // const data=await prisma.event.deleteMany();
+    // console.log(data)
 }
 
 async function main() {
