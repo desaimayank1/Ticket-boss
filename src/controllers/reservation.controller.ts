@@ -1,22 +1,12 @@
 import { Request, Response } from "express";
-import { PrismaClient, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { v4 as uuidv4 } from "uuid";
-
-const prisma = new PrismaClient();
+import prisma from "../PrimaClient";
 const MAX_RETRIES = 5;
 const EVENT_ID = "node-meetup-2025";
 
-/**
- * Create a reservation with optimistic concurrency control
- */
 export const createReservation = async (req: Request, res: Response) => {
   const { partnerId, seats } = req.body;
-
-  if (!partnerId || typeof partnerId !== "string")
-    return res.status(400).json({ error: "partnerId is required" });
-
-  if (!Number.isInteger(seats) || seats <= 0 || seats > 10)
-    return res.status(400).json({ error: "seats must be 1–10" });
 
   const existing = await prisma.reservation.findFirst({
     where: { partnerId, status: 'confirmed' }
@@ -35,7 +25,7 @@ export const createReservation = async (req: Request, res: Response) => {
       return res.status(500).json({ error: "Event not found" });
 
     if (event.availableSeats < seats)
-      return res.status(409).json({ error: "Not enough seats left" ,  remainingSeats: event.availableSeats, });
+      return res.status(409).json({ error: "Not enough seats left", remainingSeats: event.availableSeats, });
     try {
       const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         const updated = await tx.event.updateMany({
@@ -77,9 +67,6 @@ export const createReservation = async (req: Request, res: Response) => {
   return res.status(409).json({ error: "Concurrent update, try again" });
 };
 
-/**
- * Cancel an existing reservation (seat release)
- */
 export const cancelReservation = async (req: Request, res: Response) => {
   const { reservationId } = req.params;
 
@@ -132,10 +119,6 @@ export const updateReservation = async (req: Request, res: Response) => {
   const { reservationId } = req.params;
   const { seats: newSeats } = req.body;
 
-  if (!Number.isInteger(newSeats) || newSeats <= 0 || newSeats > 10) {
-    return res.status(400).json({ error: "Seats must be between 1 and 10" });
-  }
-
   try {
     const reservation = await prisma.reservation.findUnique({
       where: { reservationId },
@@ -183,7 +166,6 @@ export const updateReservation = async (req: Request, res: Response) => {
         };
       }
 
-      // optimistic concurrency control using version
       const updateEvent = await prisma.event.updateMany({
         where: { eventId: EVENT_ID, version: event.version },
         data: eventUpdateData,
@@ -215,9 +197,6 @@ export const updateReservation = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * Get all reservations for the event
- */
 export const getAllReservations = async (req: Request, res: Response) => {
   const reservations = await prisma.reservation.findMany({
     where: { eventId: EVENT_ID },
